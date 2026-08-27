@@ -1,6 +1,12 @@
-const { marked } = require('marked');
-const toc = require('markdown-toc');
-const highlight = require('highlight.js');
+const { Marked } = require('marked');
+const { markedHighlight } = require('marked-highlight');
+const markedFootnote = require('marked-footnote');
+const markedAlert = require('marked-alert');
+const hljs = require('highlight.js');
+const markedMathjaxExtension = require('../../common/service/marked-mathjax-extension');
+const markedTocExtension = require('../../common/service/marked-toc-extension');
+const markedImgonlyExtension = require('../../common/service/marked-imgonly-extension');
+const markedMermaidExtension = require('../../common/service/marked-mermaid-extension');
 const Base = require('./base');
 
 module.exports = class extends Base {
@@ -23,7 +29,7 @@ module.exports = class extends Base {
    * @param {[type]} ip   [description]
    */
   addPost(data) {
-    let create_time = think.datetime();
+    const create_time = think.datetime();
     data = Object.assign({
       type: 0,
       status: 0,
@@ -36,17 +42,29 @@ module.exports = class extends Base {
   }
 
   async savePost(data) {
-    let info = await this.where({ id: data.id }).find();
+    const info = await this.where({ id: data.id }).find();
     if (think.isEmpty(info)) {
       return Promise.reject(new Error('POST_NOT_EXIST'));
     }
+
+    // ThinkJS 的 MANY_TO_MANY 关联处理器会跳过空数组（isEmpty([]) === true），
+    // 导致无法清除已有的分类和标签关联。这里手动删除空数组对应的关联记录。
+    if (Array.isArray(data.cate) && data.cate.length === 0) {
+      await this.model('post_cate').where({ post_id: data.id }).delete();
+      delete data.cate;
+    }
+    if (Array.isArray(data.tag) && data.tag.length === 0) {
+      await this.model('post_tag').where({ post_id: data.id }).delete();
+      delete data.tag;
+    }
+
     data.update_time = think.datetime();
     return this.where({ id: data.id }).update(data);
   }
 
   async deletePost(post_id) {
-    //await this.model('post_cate').delete({post_id});
-    //await this.model('post_tag').delete({post_id});
+    // await this.model('post_cate').delete({post_id});
+    // await this.model('post_tag').delete({post_id});
     return this.where({ id: post_id }).delete();
   }
 
@@ -67,13 +85,13 @@ module.exports = class extends Base {
    * @return {}      []
    */
   getLatest(user_id, nums = 10) {
-    let where = {
+    const where = {
       create_time: { '<=': think.datetime() },
-      is_public: 1, //公开
-      type: 0, //文章
-      status: 3, //已经发布
+      is_public: 1, // 公开
+      type: 0, // 文章
+      status: 3 // 已经发布
     };
-    if (user_id) { where.user_id = user_id; }
+    if (user_id) { where.user_id = user_id }
     return this.order('id DESC')
       .where(where)
       .limit(nums)
@@ -103,7 +121,6 @@ module.exports = class extends Base {
     await think.cache('lastPostList', null);
   }
 
-
   /**
    * 更新所有文章的摘要信息并重新保存到数据库
    *
@@ -119,13 +136,12 @@ module.exports = class extends Base {
         const item = posts[i];
         const summary = await this.getSummary(item.markdown_content);
 
-        allPromises.push(this.where({ id: item.id }).update({ summary }))
+        allPromises.push(this.where({ id: item.id }).update({ summary }));
       }
 
-      await Promise.all(allPromises)
+      await Promise.all(allPromises);
     }
   }
-
 
   /**
    * 渲染 markdown
@@ -139,17 +155,16 @@ module.exports = class extends Base {
     const auto_summary = parseInt(options.auto_summary);
 
     let showToc;
-    if (!postTocManual) {
-      showToc = data.type / 1 === 0;
-    } else {
+    if (postTocManual) {
       showToc = /(?:^|[\r\n]+)\s*<!--toc-->\s*[\r\n]+/i.test(data.markdown_content);
+    } else {
+      showToc = data.type / 1 === 0 || /(?:^|[\r\n]+)\s*<!--toc-->\s*[\r\n]+/i.test(data.markdown_content);
     }
     data.content = await this.markdownToHtml(data.markdown_content, { toc: showToc, highlight: true });
-    data.summary = await this.getSummary(data.markdown_content, auto_summary)
+    data.summary = await this.getSummary(data.markdown_content, auto_summary);
 
     return data;
   }
-
 
   /**
    * 渲染 markdown 并返回摘要内容
@@ -173,7 +188,6 @@ module.exports = class extends Base {
       summary = markdown_content.split('<!--more-->')[0];
       summary = await this.markdownToHtml(summary, { toc: false, highlight: true });
       summary.replace(/<[>]*>/g, '');
-
     } else {
       summary = await this.markdownToHtml(markdown_content, { toc: false, highlight: true });
       // 过滤掉 HTML 标签 及换行等 并截取所需的长度
@@ -188,49 +202,66 @@ module.exports = class extends Base {
     return summary;
   }
 
-
   /**
    * markdown to html
    * @return {string}
    */
   async markdownToHtml(content, option = { toc: true, highlight: true }) {
-
-    // 使用包含 MathJax 解析的 Markdown 引擎解析 MD 文本
-    let markedWithMathJax = think.service('marked-with-mathjax');
-    let markedContent = await markedWithMathJax.render(content);
-
-    /**
-     * 增加 TOC 目录
-     */
-    if (option.toc) {
-      let tocContent = marked(toc(content).content).replace(/<a\s+href="#([^"]+)">(.+)?<\/a>/g, (a, b, c) => {
-        return `<a href="#${this.generateTocName(c)}">${c}</a>`;
-      });
-
-      markedContent = markedContent.replace(/<h(\d)[^<>]*>(.*?)<\/h\1>/g, (a, b, c) => {
-        return `<h${b}><a id="${this.generateTocName(c)}" class="anchor" href="#${this.generateTocName(c)}"></a>${c}</h${b}>`;
-      });
-      markedContent = `<div class="toc">${tocContent}</div>${markedContent}`;
-    }
-
-    /**
-     * 增加代码高亮
-     */
+    const extensions = [];
+    // 增加 footnote 支持
+    extensions.push(markedFootnote());
+    // 增加 alert 支持
+    extensions.push(markedAlert());
+    // 增加 highlight 支持
     if (option.highlight) {
-      markedContent = markedContent.replace(/<pre><code\s*(?:class="lang(?:uage)?-(\w+)")?>([\s\S]+?)<\/code><\/pre>/mg, (a, language, text) => {
-        text = text.replace(/&#39;/g, '\'')
-          .replace(/&gt;/g, '>')
-          .replace(/&lt;/g, '<')
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, '&');
-        var result = highlight.highlightAuto(text, language ? [language] : undefined);
-        return `<pre><code class="hljs lang-${result.language}">${result.value}</code></pre>`;
+      let detectedLang = null;
+      // 自定义钩子：将检测到的语言写入 token（walker 链中最后执行）
+      extensions.push({
+        walkTokens(token) {
+          if (token.type === 'code' && !token.lang && detectedLang) {
+            token.lang = detectedLang;
+          }
+          detectedLang = null;
+        }
       });
+      // marked-highlight：高亮并存储检测到的语言（walker 链中第二个执行）
+      extensions.push(markedHighlight({
+        emptyLangClass: 'hljs',
+        langPrefix: 'hljs lang-',
+        highlight(code, lang) {
+          const result = hljs.highlightAuto(code, lang ? [lang] : undefined);
+          detectedLang = result.language;
+          return result.value;
+        }
+      }));
+    }
+    // MathJax extension（walker 链中最先执行）
+    extensions.push(markedMathjaxExtension());
+    // TOC + heading anchor extension（仅定义 renderer，不参与 walker 链）
+    const tocEntries = [];
+    if (option.toc) {
+      extensions.push(markedTocExtension({
+        generateTocName: this.generateTocName.bind(this),
+        tocEntries
+      }));
+    }
+    // 纯图片段落标记：在渲染阶段为仅含图片的段落添加class
+    extensions.push(markedImgonlyExtension());
+    // mermaid代码块改写，便于前端渲染
+    extensions.push(markedMermaidExtension());
+
+    // markdown渲染
+    const marked = new Marked(...extensions);
+    let markedContent = await marked.parse(content);
+
+    // TOC后处理，把TOC加到渲染后的HTML开头
+    if (option.toc && tocEntries.length > 0) {
+      const tocHtml = this.buildTocHtml(tocEntries);
+      markedContent = `<div class="toc">${tocHtml}</div>${markedContent}`;
     }
 
     return markedContent;
   }
-
 
   /**
    * 获取文章创建时间
@@ -248,7 +279,6 @@ module.exports = class extends Base {
     return data;
   }
 
-
   /**
    * generate toc name
    * @param  {String} name []
@@ -265,4 +295,33 @@ module.exports = class extends Base {
     }
     return `toc-${think.md5(name).slice(0, 3)}`;
   }
-}
+
+  /**
+   * 从 tocEntries 生成嵌套 ul>li 目录 HTML
+   * @param  {Array} entries [{id, content, level}]
+   * @return {string}
+   */
+  buildTocHtml(entries) {
+    if (!entries.length) return '';
+    const minLevel = Math.min(...entries.map(e => e.level));
+    let html = '<ul>';
+    let currentLevel = minLevel;
+    for (const entry of entries) {
+      while (currentLevel < entry.level) {
+        html += '<ul>';
+        currentLevel++;
+      }
+      while (currentLevel > entry.level) {
+        html += '</ul>';
+        currentLevel--;
+      }
+      html += `<li><a href="#${entry.id}">${entry.content}</a></li>`;
+    }
+    while (currentLevel > minLevel) {
+      html += '</ul>';
+      currentLevel--;
+    }
+    html += '</ul>';
+    return html;
+  }
+};

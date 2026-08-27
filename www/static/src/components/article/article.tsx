@@ -1,9 +1,14 @@
 import React from 'react';
 import { Row, Col, DatePicker, message } from 'antd';
 import { inject, observer } from 'mobx-react';
-import moment from 'moment';
+import dayjs from 'dayjs';
+import weekday from 'dayjs/plugin/weekday';
+import localeData from 'dayjs/plugin/localeData';
 import { zip } from 'rxjs';
 import pinyin from 'tiny-pinyin';
+
+dayjs.extend(weekday);
+dayjs.extend(localeData);
 
 import ArticleHeader from './article-header/article-header';
 import ArticleEditor from './article-editor/article-editor';
@@ -14,8 +19,8 @@ import ArticleControlPublic from './control-public/control-public';
 import ArticleControlImage from './control-image/control-image';
 import ArticleControlUser from './control-user/control-user';
 
-import Checkbox from 'antd/lib/checkbox';
-import { RadioChangeEvent } from 'antd/lib/radio';
+import { Checkbox } from 'antd';
+import { RadioChangeEvent } from 'antd';
 import { ArticleProps, PreviewData } from './article.model';
 
 import './article.less';
@@ -98,7 +103,7 @@ class Article extends React.Component<ArticleProps, {}> {
         }
     }
     // 发布日期
-    onDateChange(date: moment.Moment) {
+    onDateChange(date: dayjs.Dayjs) {
         this.props.articleStore.setArticleInfo({ create_time: date });
     }
     // Tag
@@ -264,7 +269,7 @@ class Article extends React.Component<ArticleProps, {}> {
             pathname: articleInfo.pathname || 'untitled',
             markdown_content: articleInfo.markdown_content,
             create_time: articleInfo.create_time,
-            update_time: moment().format('YYYY-MM-DD HH:mm:ss'),
+            update_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
             user: this.props.userStore.userList.filter(
                 user => +user.id === +articleInfo.user_id,
             )[0],
@@ -310,8 +315,8 @@ class Article extends React.Component<ArticleProps, {}> {
         const { tagList, templateList } = sharedStore;
         return (
             <div className="post-article">
-                <Row type="flex">
-                    <Col span={18}>
+                <Row>
+                    <Col span={19}>
                         <ArticleHeader
                             {...this.props}
                             handleTitle={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -330,7 +335,7 @@ class Article extends React.Component<ArticleProps, {}> {
                         />
                         <ArticleEditor type={this.props.type} id={this.props.match.params.id} />
                     </Col>
-                    <Col span={6}>
+                    <Col span={5} className="article-control-panel">
                         <ArticleControlHeader
                             save={() => this.handleSave()}
                             saveDraft={() => this.handleSaveDraft()}
@@ -338,10 +343,11 @@ class Article extends React.Component<ArticleProps, {}> {
                         <section className="release-date">
                             <h5>发布日期</h5>
                             <DatePicker
+                                className="release-date-picker"
                                 showTime={true}
                                 allowClear={false}
                                 format="YYYY-MM-DD HH:mm:ss"
-                                value={moment(articleInfo.create_time)}
+                                value={dayjs(articleInfo.create_time)}
                                 placeholder="请选择日期"
                                 onChange={date => this.onDateChange(date)}
                             />

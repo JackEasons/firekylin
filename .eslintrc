@@ -1,5 +1,4 @@
 {
-  "parser": "babel-eslint",
   "env": {
     "browser": true,
     "es6": true,
@@ -20,8 +19,8 @@
     "plugin:import/warnings"
   ],
   "parserOptions": {
+      "ecmaVersion": "latest",
       "ecmaFeatures": {
-          "experimentalObjectRestSpread": true,
           "jsx": true
       },
       "sourceType": "module"
@@ -31,13 +30,9 @@
     "import"
   ],
   "settings": {
-    "import/resolver": {
-      "webpack": {
-        "config": "webpack.config.js"
-      }
-    }
   },
   "rules": {
+    "camelcase": 0,
     "strict": 0,
     "quotes": [2, "single"],
     "max-len": [2, {

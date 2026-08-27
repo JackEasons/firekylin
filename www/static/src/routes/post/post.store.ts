@@ -1,17 +1,17 @@
-import { observable, action } from 'mobx';
+import { makeAutoObservable } from 'mobx';
 import { message } from 'antd';
 import { http } from '../../utils/http';
 import { AppStore } from '../../app.store';
 import { PostListRequestParams, PostListResponseData, PostInfo } from './post.model';
-import { PaginationConfig } from 'antd/lib/table';
+import { TablePaginationConfig } from 'antd';
 import { map } from 'rxjs/operators';
 import { tools } from '../../utils/tools';
 
 class PostStore {
   appStore;
-  @observable loading = false;
-  @observable postList = [];
-  @observable postInfo: PostInfo = {
+  loading = false;
+  postList = [];
+  postInfo: PostInfo = {
     title: '',
     pathname: '',
     markdown_content: '',
@@ -28,12 +28,12 @@ class PostStore {
     status: 1,
     user_id: '',
   };
-  @observable pagination: PaginationConfig = {
+  pagination: TablePaginationConfig = {
     current: 1,
     pageSize: 0,
     total: 0,
   };
-  @observable plReqParams: PostListRequestParams = {
+  plReqParams: PostListRequestParams = {
     page: 1,
     status: '',
     keyword: '',
@@ -42,32 +42,28 @@ class PostStore {
 
   constructor(appStore: AppStore) {
     this.appStore = appStore;
+    makeAutoObservable(this);
   }
 
-  @action
   setLoading = data => this.loading = data
 
-  @action
   setPostList = data => {
     data.map((post, i) => {
       post.key = post.id;
       post.author = post.user.name;
       post.statusText = tools.getStatusText(post.status, post.create_time);
     });
-    this.postList = data; 
+    this.postList = data;
   }
 
-  @action
   setPostInfo = info => {
     this.postInfo = Object.assign({}, this.postInfo, info);
   }
 
-  @action 
-  setPagination = (pagination: PaginationConfig) => {
+  setPagination = (pagination: TablePaginationConfig) => {
     this.pagination = pagination;
   }
 
-  @action
   setPlReqParams = (params: PostListRequestParams) => {
     this.plReqParams = Object.assign(this.plReqParams, params);
     this.getPostList();

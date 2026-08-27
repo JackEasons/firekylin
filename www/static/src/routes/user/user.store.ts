@@ -1,4 +1,4 @@
-import { observable, action } from 'mobx';
+import { makeAutoObservable } from 'mobx';
 import superagent from 'superagent';
 import { AppStore } from '../../app.store';
 import firekylin from '../../utils/firekylin';
@@ -9,15 +9,23 @@ import { message } from 'antd';
 export default class UserStore {
     appStore;
 
-    @observable userList: any = [];
-    @observable loading = true;
-    @observable key = '0';
+    userList: any = [];
+    loading = true;
+    key = '0';
 
-    @observable submitting: false;
-    @observable userInfo;
-    @observable hasEmail: false;
+    submitting = false;
+    userInfo: any = {
+        id: 0,
+        name: '',
+        email: '',
+        display_name: '',
+        type: 0,
+        status: 0,
+        app_key: '',
+        app_secret: '',
+    };
 
-    @observable userEditPwdState: UserEditPwdState = {
+    userEditPwdState: UserEditPwdState = {
         submitting: false,
         userInfo: {}
     };
@@ -26,33 +34,24 @@ export default class UserStore {
 
     constructor(appStore: AppStore) {
         this.appStore = appStore;
+        makeAutoObservable(this);
     }
 
-    @action
     setUserList = data => this.userList = data
 
-    @action
     setLoading = data => this.loading = data
 
-    @action
     setKey = data => this.key = data
 
-    @action
     setSubmitting = data => this.submitting = data
 
-    @action
     setUserInfo = data => this.userInfo = data
 
-    @action
-    setHasEmail = data => this.hasEmail = data
-
-    @action
     setUserEditPwdState = (data: UserEditPwdState) => {
         this.userEditPwdState = Object.assign(this.userEditPwdState, data);
     }
 
     // 获取用户列表
-    @action
     getUserList(type ?: string) {
         http.get<any>(`/admin/api/user`, {type})
             .toPromise()
@@ -66,13 +65,11 @@ export default class UserStore {
     }
 
     // 获取用户信息
-    @action
     getUserInfo(id: string) {
         http.get<any>(`/admin/api/user/${id}`)
             .toPromise()
             .then(data => {
                 this.setUserInfo(data.data);
-                this.setHasEmail(!!data.data.email);
             })
             .catch(err => {
                 message.error('加载用户信息失败，请稍后重试');
@@ -80,7 +77,6 @@ export default class UserStore {
     }
 
     // 通过
-    @action
     passUser(userId: number) {
         http.post<any>(`/admin/api/user/${userId}?method=put&type=contributor`)
             .toPromise()
@@ -94,7 +90,6 @@ export default class UserStore {
     }
 
     // 删除用户
-    @action
     deleteUser(userId: number) {
         http.post<any>(`/admin/api/user/${userId}?method=delete`)
             .toPromise()
@@ -108,7 +103,6 @@ export default class UserStore {
     }
 
     // 保存用户
-    @action
     saveUser(data: any, resolve: Function, reject: Function) {
         let id = data.id;
         delete data.id;
@@ -126,13 +120,11 @@ export default class UserStore {
     }
 
     // 生成钥匙
-    @action
     generateKey(userId: string) {
         http.post<any>(`/admin/api/user/${userId}?type=key`)
             .toPromise()
             .then(data => {
                 this.setUserInfo(data.data);
-                this.setHasEmail(!!data.data.email);
             })
             .catch(err => {
                 message.error(err);

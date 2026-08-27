@@ -1,12 +1,12 @@
-import { observable, action } from 'mobx';
+import { makeAutoObservable } from 'mobx';
 import { ArticleInfo } from './article.model';
 import { http } from '../../utils/http';
-import moment from 'moment';
+import dayjs from 'dayjs';
 import { ArticleTypeEnum } from '../../enums/article-type.enum';
 import { ArticleEnum } from './article.enum';
 
 class ArticleStore {
-  @observable articleInfo: ArticleInfo = {
+  articleInfo: ArticleInfo = {
     title: '',
     pathname: '',
     markdown_content: '',
@@ -24,7 +24,10 @@ class ArticleStore {
     user_id: '',
   };
 
-  @action
+  constructor() {
+    makeAutoObservable(this);
+  }
+
   setArticleInfo = info => {
     if (info.options) {
       info.options = Object.assign({}, this.articleInfo.options, info.options);
@@ -68,7 +71,7 @@ class ArticleStore {
                 const re = /-/g;
                 res.data.create_time = res.data.create_time.replace(re, '/');
                 res.data.create_time = res.data.create_time 
-                    ? moment(new Date(res.data.create_time)) 
+                    ? dayjs(res.data.create_time) 
                     : new Date();
                 if (type === ArticleTypeEnum.POST) {
                   res.data.tag = res.data.tag.map(tag => tag.name);
